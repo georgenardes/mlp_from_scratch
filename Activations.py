@@ -13,7 +13,7 @@ class ReLU(ActivationLayer):
         self.inputs = inputs
         return np.maximum(0, inputs)
 
-    def backward(self, grad_output, learning_rate):
+    def backward(self, grad_output, learning_rate, **kwargs):
         return grad_output * np.where(self.inputs > 0, 1, 0)
     
 class QReLU(ActivationLayer):
