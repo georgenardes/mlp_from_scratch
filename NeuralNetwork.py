@@ -132,6 +132,10 @@ class NeuralNetworkWithScale:
 
 
     def backward(self, grad_output, learning_rate):
+
+        # faz essa multiplicação para padronizar operações de retropropagação nas camadas
+        grad_output = grad_output * self.layers[-1].output_scale
+
         for layer in reversed(self.layers):
             grad_output = layer.backward(grad_output, learning_rate)
 
