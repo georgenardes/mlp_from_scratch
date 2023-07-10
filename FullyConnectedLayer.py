@@ -88,7 +88,7 @@ class FullyConnectedLayerWithScale:
         grad_output = (grad_output / self.output_scale) * (self.weights_scale * self.input_scale)
         
         # gradient calculation
-        grad_input = np.matmul(grad_output, self.weights.T)
+        grad_input = np.matmul(grad_output, self.weights.T / self.weights_scale)
         grad_weights = np.matmul(self.inputs.T, grad_output) / self.weights_scale
         grad_biases = np.sum(grad_output, axis=0, keepdims=True) / (self.weights_scale * self.input_scale)
 
