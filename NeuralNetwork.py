@@ -251,9 +251,21 @@ class QNeuralNetworkWithScale:
         # faz essa multiplicação para padronizar operações de retropropagação nas camadas
         grad_output = grad_output * self.layers[-1].output_scale
 
-        for layer in reversed(self.layers):
-            grad_output = layer.backward(grad_output, learning_rate)
+        # escala gradiente
+        grad_output_scale = np.max(np.abs(grad_output))
+        grad_output /= grad_output_scale
 
+        # quantiza o gradiente
+        grad_output = quantize(grad_output, True)
+
+        for layer in reversed(self.layers):
+            if isinstance(layer, QFullyConnectedLayerWithScale):
+                grad_output = layer.backward_with_scale(grad_output, grad_output_scale, learning_rate)
+                grad_output_scale = layer.grad_output_scale
+            elif isinstance(layer, ReLU):
+                grad_output = layer.backward(grad_output, learning_rate)
+            else:
+                print("pau!")
 
     def train(self, inputs, targets, learning_rate, num_epochs, batch_size=None):
         for epoch in range(num_epochs):

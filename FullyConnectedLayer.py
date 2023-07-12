@@ -227,7 +227,10 @@ class QFullyConnectedLayerWithScale:
         self.biases -=  learning_rate * grad_biases
 
         # scale de grad_output or grad_of_input
-        self.grad_output_scale = np.max(np.abs(grad_output))
+        self.grad_output_scale =  0.9 * self.grad_output_scale + 0.1 * np.max(np.abs(grad_input))
         grad_input = grad_input / self.grad_output_scale
+
+        # quantiza o gradiente
+        grad_input = quantize(grad_input, True)
 
         return grad_input
