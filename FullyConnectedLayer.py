@@ -136,6 +136,7 @@ class QFullyConnectedLayerWithScale:
         self.input_size = input_size
         self.output_size = output_size
         self.weights = np.random.randn(input_size, output_size) * np.sqrt(2/input_size)
+        self.qw = None # quantized weight use for backprop
         self.biases = np.zeros((1, output_size))
 
         #################################################
@@ -174,15 +175,14 @@ class QFullyConnectedLayerWithScale:
         b = self.biases / (self.weights_scale * self.input_scale)
 
         # quantiza os pesos
-        qw = quantize(w, True)
+        self.qw = quantize(w, True)
         # quantiza os biases
-        qb = quantize(b, True)        
-        # quantiza input
-        # qin = quantize(inputs, True)
+        self.qb = quantize(b, True)   
+                     
         #################################################
 
         # faz matmul e desescala pesos e biases                
-        self.output = (np.matmul(inputs, qw) + qb) * (self.weights_scale * self.input_scale)
+        self.output = (np.matmul(inputs, self.qw) + self.qb) * (self.weights_scale * self.input_scale)
         
         # descobre escala da saída com base em uma média
         self.output_scale = 0.9 * self.output_scale + 0.1 * np.max(np.abs(self.output))      
@@ -214,17 +214,30 @@ class QFullyConnectedLayerWithScale:
 
     
     def backward_with_scale(self, grad_output, grad_scale, learning_rate):
-        """ grad_output é o erro que chega para esta camada """        
-
+        """ grad_output é o erro que chega para esta camada (grad output já vem quantizado)"""        
+        
         # scaling gradients        
         grad_output = (grad_output) * (self.weights_scale * self.input_scale * grad_scale  / self.output_scale)         
 
-        # gradient calculation 
-        grad_input = np.matmul(grad_output, self.weights.T / self.weights_scale)
+        # gradient calculation                 
+        grad_input = np.matmul(grad_output, self.qw.T)
 
         # para simular a operação em hardware, será necessário salvar o grad_weights escalado e quantizado 
         grad_weights = np.matmul(self.inputs.T, grad_output) / self.weights_scale
         grad_biases = np.sum(grad_output, axis=0, keepdims=True) / (self.weights_scale * self.input_scale)
+
+        # get the grad w scale
+        grad_weights_scale = np.max(np.abs(grad_weights))
+        grad_bias_scale = np.max(np.abs(grad_biases))
+        # scale the grad
+        grad_weights /= grad_weights_scale
+        grad_biases /= grad_bias_scale
+        # quantize the grad
+        qgw = quantize(grad_weights, True)
+        qgb = quantize(grad_biases, True)
+        # scale back the grad
+        grad_weights = qgw * grad_weights_scale
+        grad_biases = qgb * grad_bias_scale
 
         # weight update
         self.weights -= learning_rate * grad_weights
