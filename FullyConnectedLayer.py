@@ -149,8 +149,14 @@ class QFullyConnectedLayerWithScale:
 
         # escala de gradiente dos pesos
         self.grad_weights_scale = 1
+        self.grad_bias_scale = 1 
 
         #################################################
+
+        # debug
+        self.save_grad_w = False
+        self.grad_w = None
+        self.grad_b = None
 
 
     def forward(self, inputs):
@@ -214,66 +220,67 @@ class QFullyConnectedLayerWithScale:
 
     
     def backward_with_scale(self, grad_output, grad_scale, learning_rate):
-        """ grad_output é o erro que chega para esta camada (grad output já vem quantizado)"""        
+        """ 
+        Esta função faz propagação do erro para os pesos e para a entrada.
+
+        grad_output: esse parâmetro é o Erro que vem da camada l+1. Ele vem quantizado para Deep Nibble.
+        grad_scale: esse é a Escala usada para normalizar o Erro antes de quantiza-lo para Deep Nibble
+        learning_rate: taxa de aprendizado
+        """        
         
         # scaling gradients        
         grad_output = (grad_output) * (self.weights_scale * self.input_scale * grad_scale  / self.output_scale)         
 
-        # gradient calculation                 
+        ##########
+        # gradient calculation. self.qw é a matriz de pesos quantizados utilizados na forward prop
         grad_input = np.matmul(grad_output, self.qw.T)
 
-        # para simular a operação em hardware, será necessário salvar o grad_weights escalado e quantizado 
+        # scale de grad_output or grad_of_input
+        self.grad_output_scale =  0.9 * self.grad_output_scale + 0.1 * np.max(np.abs(grad_input))
+        grad_input = grad_input / self.grad_output_scale
+
+        # quantiza o gradiente
+        grad_input = quantize(grad_input, True)
+        ##########
+
+        ##########
+        # calcula o gradiente dos pesos. self.inputs é a entrada dessa camada na etapa de forward prop. Ela é quantizada. 
+        # self.weights_scale é a escala utilizada para os pesos na etapa forward prop e é necessário aqui por conta da derivada
         grad_weights = np.matmul(self.inputs.T, grad_output) / self.weights_scale
         grad_biases = np.sum(grad_output, axis=0, keepdims=True) / (self.weights_scale * self.input_scale)
 
         # get the grad w scale
-        grad_weights_scale = np.max(np.abs(grad_weights))
-        grad_bias_scale = np.max(np.abs(grad_biases))
+        self.grad_weights_scale = 0.9 * self.grad_weights_scale + 0.1 * np.max(np.abs(grad_weights))
+        # grad_weights_scale = np.max(np.abs(grad_weights))
+        self.grad_bias_scale = 0.9 * self.grad_bias_scale + 0.1 * np.max(np.abs(grad_biases))
+        # grad_bias_scale = np.max(np.abs(grad_biases))
+
         # scale the grad
-        grad_weights /= grad_weights_scale
-        grad_biases /= grad_bias_scale
+        grad_weights /= self.grad_weights_scale
+        grad_biases /= self.grad_bias_scale
         # quantize the grad
         qgw = quantize(grad_weights, True)
         qgb = quantize(grad_biases, True)
+        ##########
+
+        # salva grad para debbug
+        if self.save_grad_w:
+            self.grad_w = qgw
+            self.grad_b = qgb
+
+
+        #################### ETAPA DE ATUALIZAÇÃO DOS PESOS ######################
+
         # scale back the grad
-        grad_weights = qgw * grad_weights_scale
-        grad_biases = qgb * grad_bias_scale
+        grad_weights = qgw * self.grad_weights_scale
+        grad_biases = qgb * self.grad_bias_scale
 
         # weight update
         self.weights -= learning_rate * grad_weights
         self.biases -=  learning_rate * grad_biases
 
-        # scale de grad_output or grad_of_input
-        self.grad_output_scale =  0.9 * self.grad_output_scale + 0.1 * np.max(np.abs(grad_input))
-        grad_input = grad_input / self.grad_output_scale
-
-        # quantiza o gradiente
-        grad_input = quantize(grad_input, True)
-
+        ############################################################################
+        
         return grad_input
     
-    def backward_with_scale_and_quantization(self, grad_output, grad_scale, learning_rate):
-        """ grad_output é o erro que chega para esta camada """        
-
-        # scaling gradients        
-        grad_output = (grad_output) * (self.weights_scale * self.input_scale * grad_scale  / self.output_scale)         
-
-        # gradient calculation 
-        grad_input = np.matmul(grad_output, self.weights.T / self.weights_scale)
-
-        # para simular a operação em hardware, será necessário salvar o grad_weights escalado e quantizado 
-        grad_weights = np.matmul(self.inputs.T, grad_output) / self.weights_scale
-        grad_biases = np.sum(grad_output, axis=0, keepdims=True) / (self.weights_scale * self.input_scale)
-
-        # weight update
-        self.weights -= learning_rate * grad_weights
-        self.biases -=  learning_rate * grad_biases
-
-        # scale de grad_output or grad_of_input
-        self.grad_output_scale =  0.9 * self.grad_output_scale + 0.1 * np.max(np.abs(grad_input))
-        grad_input = grad_input / self.grad_output_scale
-
-        # quantiza o gradiente
-        grad_input = quantize(grad_input, True)
-
-        return grad_input
+    
