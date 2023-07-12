@@ -210,6 +210,9 @@ class QNeuralNetworkWithScale:
         self.input_size = input_size
         self.output_size = output_size
 
+        # loss function grad output scale
+        self.grad_output_scale = 1
+
         self.layers = []
         self.layers.append(QFullyConnectedLayerWithScale(input_size, 256))
         self.layers.append(ReLU())
@@ -218,7 +221,7 @@ class QNeuralNetworkWithScale:
         self.layers.append(QFullyConnectedLayerWithScale(256, output_size))
 
         self.softmax = Softmax()
-    
+
 
     def forward(self, inputs):
         # descobre a escala do dado de entrada
@@ -250,9 +253,11 @@ class QNeuralNetworkWithScale:
 
         # faz essa multiplicação para padronizar operações de retropropagação nas camadas
         grad_output = grad_output * self.layers[-1].output_scale
+        # # # # # desconsiderar # # # # #
 
-        # escala gradiente
-        grad_output_scale = np.max(np.abs(grad_output))
+        # escala gradiente com média móvel
+        self.grad_output_scale = 0.9 * self.grad_output_scale + 0.1 * np.max(np.abs(grad_output))
+        grad_output_scale = self.grad_output_scale
         grad_output /= grad_output_scale
 
         # quantiza o gradiente
@@ -266,6 +271,8 @@ class QNeuralNetworkWithScale:
                 grad_output = layer.backward(grad_output, learning_rate)
             else:
                 print("pau!")
+
+
 
     def train(self, inputs, targets, learning_rate, num_epochs, batch_size=None):
         for epoch in range(num_epochs):
@@ -285,7 +292,8 @@ class QNeuralNetworkWithScale:
                 dz = self.cross_entropy_loss_with_logits_derivative(y_pred, y_true)
                 
                 # backward pass
-                self.backward(dz, learning_rate)
+                self.backward(dz, learning_rate)                
+                
 
             loss /= len(inputs)
             print(f"Epoch {epoch+1}/{num_epochs}, Loss: {loss}")

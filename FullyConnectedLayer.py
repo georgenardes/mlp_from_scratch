@@ -143,8 +143,12 @@ class QFullyConnectedLayerWithScale:
         self.weights_scale = np.max(np.abs(self.weights))
         self.input_scale = None
         self.output_scale = 1
-        # escala da escala de gradiente
+        # escala de gradiente
         self.grad_output_scale = 1
+
+        # escala de gradiente dos pesos
+        self.grad_weights_scale = 1
+
         #################################################
 
 
@@ -157,7 +161,7 @@ class QFullyConnectedLayerWithScale:
     
     
     def foward_with_scale(self, inputs, x_scale):
-        # salva entrada para backprop
+        # salva entrada para backprop, (entrada já vem quantizada)
         self.inputs = inputs
 
         # salva escala de entrada
@@ -213,9 +217,35 @@ class QFullyConnectedLayerWithScale:
         """ grad_output é o erro que chega para esta camada """        
 
         # scaling gradients        
-        grad_output = (grad_output) * (self.weights_scale * self.input_scale * grad_scale  / self.output_scale) 
-        
-        # gradient calculation
+        grad_output = (grad_output) * (self.weights_scale * self.input_scale * grad_scale  / self.output_scale)         
+
+        # gradient calculation 
+        grad_input = np.matmul(grad_output, self.weights.T / self.weights_scale)
+
+        # para simular a operação em hardware, será necessário salvar o grad_weights escalado e quantizado 
+        grad_weights = np.matmul(self.inputs.T, grad_output) / self.weights_scale
+        grad_biases = np.sum(grad_output, axis=0, keepdims=True) / (self.weights_scale * self.input_scale)
+
+        # weight update
+        self.weights -= learning_rate * grad_weights
+        self.biases -=  learning_rate * grad_biases
+
+        # scale de grad_output or grad_of_input
+        self.grad_output_scale =  0.9 * self.grad_output_scale + 0.1 * np.max(np.abs(grad_input))
+        grad_input = grad_input / self.grad_output_scale
+
+        # quantiza o gradiente
+        grad_input = quantize(grad_input, True)
+
+        return grad_input
+    
+    def backward_with_scale_and_quantization(self, grad_output, grad_scale, learning_rate):
+        """ grad_output é o erro que chega para esta camada """        
+
+        # scaling gradients        
+        grad_output = (grad_output) * (self.weights_scale * self.input_scale * grad_scale  / self.output_scale)         
+
+        # gradient calculation 
         grad_input = np.matmul(grad_output, self.weights.T / self.weights_scale)
 
         # para simular a operação em hardware, será necessário salvar o grad_weights escalado e quantizado 

@@ -1,0 +1,63 @@
+import tensorflow as tf
+import numpy as np
+
+
+def load_mnist():
+        
+    # Load MNIST dataset
+    (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
+    assert x_train.shape == (60000, 28, 28)
+    assert x_test.shape == (10000, 28, 28)
+    assert y_train.shape == (60000,)
+    assert y_test.shape == (10000,)
+
+    # normalize
+    x_train = x_train.reshape(60000, -1).astype(np.float32) / 255.
+    x_test = x_test.reshape(10000, -1).astype(np.float32) / 255.
+
+    # to one-hot
+    y_train = tf.one_hot(y_train, 10, 1., 0.).numpy()
+    y_test = tf.one_hot(y_test, 10, 1., 0.).numpy()
+
+    return x_train, x_test, y_train, y_test
+
+
+def load_fashion_mnist():
+        
+    # Load MNIST dataset
+    (x_train, y_train), (x_test, y_test) = tf.keras.datasets.fashion_mnist.load_data()
+    assert x_train.shape == (60000, 28, 28)
+    assert x_test.shape == (10000, 28, 28)
+    assert y_train.shape == (60000,)
+    assert y_test.shape == (10000,)
+
+    # normalize
+    x_train = x_train.reshape(60000, -1).astype(np.float32) / 255.
+    x_test = x_test.reshape(10000, -1).astype(np.float32) / 255.
+
+    # to one-hot
+    y_train = tf.one_hot(y_train, 10, 1., 0.).numpy()
+    y_test = tf.one_hot(y_test, 10, 1., 0.).numpy()
+
+    return x_train, x_test, y_train, y_test
+
+def load_cifar10():
+        
+    # Load MNIST dataset
+    (x_train, y_train), (x_test, y_test) = tf.keras.datasets.cifar10.load_data()
+    assert x_train.shape == (50000, 32, 32, 3)
+    assert x_test.shape == (10000, 32, 32, 3)
+
+    print(y_train.shape)
+    assert y_train.shape == (50000,1)
+    assert y_test.shape == (10000,1)
+
+    # normalize
+    x_train = x_train.reshape(50000, -1).astype(np.float32) / 255.
+    x_test = x_test.reshape(10000, -1).astype(np.float32) / 255.
+
+    # to one-hot
+    y_train = tf.one_hot(y_train[:, 0], 10, 1., 0.).numpy()
+    y_test = tf.one_hot(y_test[:, 0], 10, 1., 0.).numpy()
+
+    return x_train, x_test, y_train, y_test
