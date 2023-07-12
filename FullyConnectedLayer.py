@@ -157,6 +157,8 @@ class QFullyConnectedLayerWithScale:
     
     
     def foward_with_scale(self, inputs, x_scale):
+        # salva entrada para backprop
+        self.inputs = inputs
 
         # salva escala de entrada
         self.input_scale = x_scale
@@ -170,12 +172,12 @@ class QFullyConnectedLayerWithScale:
         # quantiza os pesos
         qw = quantize(w, True)
         # quantiza os biases
-        qb = quantize(b, True)
-
+        qb = quantize(b, True)        
+        # quantiza input
+        # qin = quantize(inputs, True)
         #################################################
 
-        # faz matmul e desescala pesos e biases        
-        self.inputs = inputs
+        # faz matmul e desescala pesos e biases                
         self.output = (np.matmul(inputs, qw) + qb) * (self.weights_scale * self.input_scale)
         
         # descobre escala da saída com base em uma média
@@ -183,6 +185,9 @@ class QFullyConnectedLayerWithScale:
 
         # escala saída
         self.output = self.output / self.output_scale
+
+        # quantiza saída
+        self.output = quantize(self.output, True)
         #################################################
 
         return self.output
@@ -191,7 +196,7 @@ class QFullyConnectedLayerWithScale:
     def backward(self, grad_output, learning_rate):
         
         # scaling gradients        
-        grad_output = (grad_output / self.output_scale) * (self.weights_scale * self.input_scale)
+        grad_output = (grad_output ) * (self.weights_scale * self.input_scale / self.output_scale)
         
         # gradient calculation
         grad_input = np.matmul(grad_output, self.weights.T / self.weights_scale)
@@ -208,7 +213,7 @@ class QFullyConnectedLayerWithScale:
         """ grad_output é o erro que chega para esta camada """        
 
         # scaling gradients        
-        grad_output = (grad_output / self.output_scale) * (self.weights_scale * self.input_scale) * (grad_scale)
+        grad_output = (grad_output) * (self.weights_scale * self.input_scale * grad_scale  / self.output_scale) 
         
         # gradient calculation
         grad_input = np.matmul(grad_output, self.weights.T / self.weights_scale)

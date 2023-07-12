@@ -1,6 +1,7 @@
 import numpy as np
 from FullyConnectedLayer import FullyConnectedLayer, FullyConnectedLayerWithScale, QFullyConnectedLayerWithScale
 from Activations import *
+from quantizer import quantize
 
 
 class NeuralNetwork:
@@ -225,6 +226,10 @@ class QNeuralNetworkWithScale:
         
         # escala entrada e atribui a variavel output que entrará no laço
         output = inputs / x_scale          
+
+        # quantiza a entrada
+        output = quantize(inputs, True)
+
 
         for layer in self.layers:
 
