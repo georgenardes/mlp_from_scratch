@@ -227,12 +227,12 @@ class QFullyConnectedLayerWithScale:
         grad_output: esse parâmetro é o Erro que vem da camada l+1. Ele vem quantizado para Deep Nibble.
         grad_scale: esse é a Escala usada para normalizar o Erro antes de quantiza-lo para Deep Nibble
         learning_rate: taxa de aprendizado
-        """        
-        
+        """                
         # scaling gradients        
-        grad_output = (grad_output) * (self.weights_scale * self.input_scale * grad_scale  / self.output_scale)         
+        # print( self.weights_scale, self.input_scale, grad_scale, self.output_scale)
 
-        ##########
+        grad_output = (grad_output) * (self.weights_scale * self.input_scale * grad_scale  / self.output_scale)         
+        
         # gradient calculation. self.qw é a matriz de pesos quantizados utilizados na forward prop
         grad_input = cp.matmul(grad_output, self.qw.T)
 
@@ -242,44 +242,61 @@ class QFullyConnectedLayerWithScale:
 
         # quantiza o gradiente
         grad_input = quantize(grad_input, True)
-        ##########
-
-        ##########
+                
         # calcula o gradiente dos pesos. self.inputs é a entrada dessa camada na etapa de forward prop. Ela é quantizada. 
         # self.weights_scale é a escala utilizada para os pesos na etapa forward prop e é necessário aqui por conta da derivada
         grad_weights = cp.matmul(self.inputs.T, grad_output) / self.weights_scale
         grad_biases = cp.sum(grad_output, axis=0, keepdims=True) / (self.weights_scale * self.input_scale)
 
         # get the grad w scale
-        self.grad_weights_scale = 0.9 * self.grad_weights_scale + 0.1 * cp.max(cp.abs(grad_weights))
-        # grad_weights_scale = cp.max(cp.abs(grad_weights))
-        self.grad_bias_scale = 0.9 * self.grad_bias_scale + 0.1 * cp.max(cp.abs(grad_biases))
-        # grad_bias_scale = cp.max(cp.abs(grad_biases))
+        self.grad_weights_scale = 0.9 * self.grad_weights_scale + 0.1 * cp.max(cp.abs(grad_weights))        
+        self.grad_bias_scale = 0.9 * self.grad_bias_scale + 0.1 * cp.max(cp.abs(grad_biases))        
 
         # scale the grad
         grad_weights /= self.grad_weights_scale
         grad_biases /= self.grad_bias_scale
         # quantize the grad
         qgw = quantize(grad_weights, True)
-        qgb = quantize(grad_biases, True)
-        ##########
+        qgb = quantize(grad_biases, True)        
 
-        # salva grad para debbug
-        if self.save_grad_w:
-            self.grad_w = qgw
-            self.grad_b = qgb
 
+        # #################### ETAPA DE ATUALIZAÇÃO DOS PESOS #######################
+        # # weight scaling
+        # self.qw = self.qw * self.weights_scale
+        # # gradient scaling
+        # qgw = qgw * self.grad_weights_scale
+        # # weight updating
+        # self.qw = self.qw - learning_rate * qgw
+        # 
+        # # bias scaling
+        # self.qb = self.qb * (self.weights_scale * self.input_scale) 
+        # # bias gradient scaling
+        # qgb = qgb * self.grad_bias_scale
+        # # bias updating
+        # self.qb = self.qb - learning_rate * qgb
+# 
+        # # atribui a weights. Weights será escalado e quantizado durante inferência
+        # self.weights = self.qw 
+        # self.biases = self.qb 
+        # ###########################################################################
+
+
+        # #################### ETAPA DE ATUALIZAÇÃO DOS PESOS ###################### (não funcionou assim)
+        # # weight update
+        # self.qw = self.qw - learning_rate * self.grad_weights_scale * qgw
+        # self.qb = self.qb - learning_rate * self.grad_bias_scale * qgb
+        # 
+        # self.weights = self.qw * self.weights_scale
+        # self.biases = self.qb * self.weights_scale * self.input_scale
+        # ############################################################################
 
         #################### ETAPA DE ATUALIZAÇÃO DOS PESOS ######################
-
         # scale back the grad
         grad_weights = qgw * self.grad_weights_scale
         grad_biases = qgb * self.grad_bias_scale
-
         # weight update
         self.weights -= learning_rate * grad_weights
         self.biases -=  learning_rate * grad_biases
-
         ############################################################################
         
         return grad_input
