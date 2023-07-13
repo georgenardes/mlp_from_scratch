@@ -1,5 +1,5 @@
 import numpy as np
-
+import cupy as cp
 
 class ActivationLayer:
     def forward(self, inputs):
@@ -11,23 +11,23 @@ class ActivationLayer:
 class ReLU(ActivationLayer):
     def forward(self, inputs):
         self.inputs = inputs
-        return np.maximum(0, inputs)
+        return cp.maximum(0, inputs)
 
     def backward(self, grad_output, learning_rate, **kwargs):
-        return grad_output * np.where(self.inputs > 0, 1, 0)
+        return grad_output * cp.where(self.inputs > 0, 1, 0)
     
 class QReLU(ActivationLayer):
     def forward(self, inputs):
         self.inputs = inputs
-        return np.maximum(0, inputs)
+        return cp.maximum(0, inputs)
 
     def backward(self, grad_output, learning_rate):
-        return grad_output * np.where(self.inputs > 0, 1, 0)
+        return grad_output * cp.where(self.inputs > 0, 1, 0)
 
 
 class Sigmoid(ActivationLayer):
     def forward(self, inputs):
-        self.outputs = 1 / (1 + np.exp(-inputs))
+        self.outputs = 1 / (1 + cp.exp(-inputs))
         return self.outputs
 
     def backward(self, grad_output, learning_rate):
@@ -35,7 +35,7 @@ class Sigmoid(ActivationLayer):
 
 class Tanh(ActivationLayer):
     def forward(self, inputs):
-        self.outputs = np.tanh(inputs)
+        self.outputs = cp.tanh(inputs)
         return self.outputs
 
     def backward(self, grad_output, learning_rate):
@@ -44,8 +44,8 @@ class Tanh(ActivationLayer):
     
 class Softmax(ActivationLayer):
     def forward(self, inputs):
-        self.outputs = np.exp(inputs - np.max(inputs, axis=-1, keepdims=True))
-        self.outputs /= np.sum(self.outputs, axis=-1, keepdims=True)
+        self.outputs = cp.exp(inputs - cp.max(inputs, axis=-1, keepdims=True))
+        self.outputs /= cp.sum(self.outputs, axis=-1, keepdims=True)
         return self.outputs
 
     def backward(self, grad_output, learning_rate):

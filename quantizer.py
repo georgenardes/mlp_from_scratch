@@ -1,23 +1,23 @@
 import numpy as np
-
+import cupy as cp
 
 def stochastic_rounding(x):
     # takes the integer part of the number
-    x_int = x.astype(np.int32)
+    x_int = x.astype(cp.int32)
     # takes the fractional part
-    x_frac = np.abs(x - x_int)
+    x_frac = cp.abs(x - x_int)
 
     # generate a random number
-    rng = np.random.random(x_int.shape)
+    rng = cp.random.random(x_int.shape)
 
     # if the frac is grater... for positive cases
-    rounded_pos = np.where(x_frac > rng, x_int + 1, x_int)
+    rounded_pos = cp.where(x_frac > rng, x_int + 1, x_int)
 
     # if the grac is greate... for negative cases
-    rounded_neg = np.where(x_frac > rng, x_int - 1, x_int)
+    rounded_neg = cp.where(x_frac > rng, x_int - 1, x_int)
 
     # select the rounded according to the signal
-    rounded = np.where(x < 0, rounded_neg, rounded_pos)
+    rounded = cp.where(x < 0, rounded_neg, rounded_pos)
     
     return rounded
 
@@ -29,37 +29,37 @@ def quantize(x, round_stoch = True):
     eps = 1e-8
 
     # extract the signal
-    s = np.sign(x)
+    s = cp.sign(x)
 
     # takes the abs
-    abs_x = np.abs(x)
+    abs_x = cp.abs(x)
 
-    cliped_abs_x = np.where(abs_x < eps, eps, abs_x) # clip the min value of abs. (this is just for avoid numercal problems)
-    cliped_abs_x = np.where(cliped_abs_x > 1, 1, cliped_abs_x) # clip the max value of DN 
+    cliped_abs_x = cp.where(abs_x < eps, eps, abs_x) # clip the min value of abs. (this is just for avoid numercal problems)
+    cliped_abs_x = cp.where(cliped_abs_x > 1, 1, cliped_abs_x) # clip the max value of DN 
 
     # gets the exponent with base 2
-    exp = np.log2(cliped_abs_x)
+    exp = cp.log2(cliped_abs_x)
 
     # round to nearest and cast to int (use stochastic rounding)
     if round_stoch:
         round_exp = stochastic_rounding(exp)
     else:
-        round_exp = (np.round(exp)).astype(np.int32)
+        round_exp = (cp.round(exp)).astype(cp.int32)
 
 
     # stochastic zero
     
     # detect underflow
-    underflow = np.where(round_exp < -7, 1, 0)
+    underflow = cp.where(round_exp < -7, 1, 0)
 
     # clip expoent in -7
-    clip_exp = np.where(underflow, -7, round_exp)
+    clip_exp = cp.where(underflow, -7, round_exp)
     
     # randomize the signal
-    s = np.where(np.logical_and(np.random.random(round_exp.shape) < 0.5, underflow), -s, s) 
+    s = cp.where(cp.logical_and(cp.random.random(round_exp.shape) < 0.5, underflow), -s, s) 
     
     # convert to float32 again
-    qx = s * np.power(2., clip_exp)
+    qx = s * cp.power(2., clip_exp)
     return qx
 
 

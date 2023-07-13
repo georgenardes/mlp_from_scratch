@@ -2,7 +2,7 @@ import numpy as np
 from FullyConnectedLayer import FullyConnectedLayer, FullyConnectedLayerWithScale, QFullyConnectedLayerWithScale
 from Activations import *
 from quantizer import quantize
-
+import cupy as cp
 
 class NeuralNetwork:
     """ vanilla NN """
@@ -225,13 +225,14 @@ class QNeuralNetworkWithScale:
 
     def forward(self, inputs):
         # descobre a escala do dado de entrada
-        x_scale = np.max(np.abs(inputs))    
+        cp_inputs = cp.array(inputs)
+        x_scale = cp.max(cp.abs(cp_inputs))    
         
         # escala entrada e atribui a variavel output que entrará no laço
-        output = inputs / x_scale          
+        output = cp_inputs / x_scale          
 
         # quantiza a entrada
-        output = quantize(inputs, True)
+        output = quantize(cp_inputs, True)
 
 
         for layer in self.layers:
@@ -256,7 +257,7 @@ class QNeuralNetworkWithScale:
         # # # # # desconsiderar # # # # #
 
         # escala gradiente com média móvel
-        self.grad_output_scale = 0.9 * self.grad_output_scale + 0.1 * np.max(np.abs(grad_output))
+        self.grad_output_scale = 0.9 * self.grad_output_scale + 0.1 * cp.max(cp.abs(grad_output))
         grad_output_scale = self.grad_output_scale
         grad_output /= grad_output_scale
 
@@ -303,24 +304,24 @@ class QNeuralNetworkWithScale:
         outputs = []
         for batch_inputs in self.get_batches(inputs, batch_size=batch_size):        
             output = self.forward(batch_inputs)
-            predicted_class = np.argmax(output, axis=-1)
+            predicted_class = cp.argmax(output, axis=-1)
             outputs.append(predicted_class)
-        outputs = np.concatenate(outputs, axis=0)
-        return np.array(outputs)
+        outputs = cp.concatenate(outputs, axis=0)
+        return cp.array(outputs)
     
 
     def predict(self, inputs):
         outputs = []
         for input in inputs:
             output = self.forward(input)
-            predicted_class = np.argmax(output)
+            predicted_class = cp.argmax(output)
             outputs.append(predicted_class)        
-        return np.array(outputs)
+        return cp.array(outputs)
 
 
     def cross_entropy_loss_with_logits(self, output, targets):
         num_samples = output.shape[0]
-        loss = np.sum(-targets * np.log(output + 1e-8)) / num_samples
+        loss = cp.sum(-targets * cp.log(output + 1e-8)) / num_samples
         return loss
 
 
