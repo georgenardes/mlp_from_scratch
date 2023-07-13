@@ -274,7 +274,7 @@ class QNeuralNetworkWithScale:
 
 
 
-    def train(self, inputs, targets, learning_rate, num_epochs, batch_size=None):
+    def train(self, inputs, targets, learning_rate, num_epochs, batch_size=None, x_val = None, y_val = None):
         for epoch in range(num_epochs):
             loss = 0.0
             for batch_inputs, y_true in self.get_batches(inputs, targets, batch_size):
@@ -296,7 +296,19 @@ class QNeuralNetworkWithScale:
                 
 
             loss /= len(inputs)
-            print(f"Epoch {epoch+1}/{num_epochs}, Loss: {loss}")
+
+            str_train_log = f"Epoch {epoch+1}/{num_epochs}, Loss: {loss} "
+            if x_val is not None and y_val is not None:
+                # validation
+                z = self.forward(x_val)
+                y_pred = np.argmax(z, axis=-1)
+
+                # Calculate accuracy
+                accuracy = np.mean(y_pred == np.argmax(y_val, axis=1))
+
+                str_train_log += f"Accuracy: {accuracy * 100}%"
+                
+            print(str_train_log)
 
 
     def predict(self, inputs, batch_size=32):
