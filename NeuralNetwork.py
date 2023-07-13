@@ -302,10 +302,10 @@ class QNeuralNetworkWithScale:
             if x_val is not None and y_val is not None:
                 # validation
                 z = self.forward(x_val)
-                y_pred = np.argmax(z, axis=-1)
+                y_pred = cp.argmax(z, axis=-1)
 
                 # Calculate accuracy
-                accuracy = np.mean(y_pred == np.argmax(y_val, axis=1))
+                accuracy = cp.mean(y_pred == cp.argmax(y_val, axis=1))
 
                 str_train_log += f"Accuracy: {accuracy * 100}%"
                 
