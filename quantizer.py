@@ -46,20 +46,30 @@ def quantize(x, round_stoch = True):
     else:
         round_exp = (cp.round(exp)).astype(cp.int32)
 
-
-    # stochastic zero
     
+    ###################
+    # stochastic zero
     # detect underflow
     underflow = cp.where(round_exp < -7, 1, 0)
-
     # clip expoent in -7
-    clip_exp = cp.where(underflow, -7, round_exp)
-    
+    clip_exp = cp.where(underflow, -7, round_exp)    
     # randomize the signal
     s = cp.where(cp.logical_and(cp.random.random(round_exp.shape) < 0.5, underflow), -s, s) 
-    
     # convert to float32 again
     qx = s * cp.power(2., clip_exp)
+    ###################
+
+    # # ###################
+    # # fixed zero    
+    # # detect underflow
+    # underflow = cp.where(round_exp < -7, 1, 0)
+    # # clip exponents
+    # clip_exp = cp.where(underflow, -7, round_exp)
+    # # convert to float32 again
+    # qx = s * cp.power(2., clip_exp)
+    # # fixed zero
+    # qx = cp.where(underflow, 0, qx)
+
     return qx
 
 
