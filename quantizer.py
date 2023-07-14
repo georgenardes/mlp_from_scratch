@@ -59,7 +59,7 @@ def quantize(x, round_stoch = True):
     qx = s * cp.power(2., clip_exp)
     ###################
 
-    # # ###################
+    # ###################
     # # fixed zero    
     # # detect underflow
     # underflow = cp.where(round_exp < -7, 1, 0)
