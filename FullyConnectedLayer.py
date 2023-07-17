@@ -134,9 +134,10 @@ class QFullyConnectedLayerWithScale:
         
         self.input_size = input_size
         self.output_size = output_size
-        self.weights = cp.random.randn(input_size, output_size) * cp.sqrt(2/input_size)
+        self.weights = cp.random.randn(input_size, output_size) * cp.sqrt(0.15) # * cp.sqrt(2/input_size)
         self.qw = None # quantized weight use for backprop
         self.biases = cp.zeros((1, output_size))
+        self.qb = None # quantized bias
 
         #################################################
         # escala inicial dos pesos
@@ -195,7 +196,7 @@ class QFullyConnectedLayerWithScale:
 
         # faz matmul e desescala pesos e biases                
         self.output = (cp.matmul(inputs, self.qw) + self.qb) * (self.weights_scale * self.input_scale)
-        
+                
         # descobre escala da saída com base em uma média
         self.output_scale = 0.99 * self.output_scale + 0.01 * cp.max(cp.abs(self.output))      
         self.os_hist.append(self.output_scale)
@@ -236,7 +237,9 @@ class QFullyConnectedLayerWithScale:
         """                
 
         self.gos_hist.append(grad_scale)
-        self.grad_output_hist.append(cp.asnumpy(grad_output))
+        
+        # if 1000 < self.iteration < 11000:
+        #   self.grad_output_hist.append(cp.asnumpy(grad_output))
 
         # scaling gradients        
         # print( self.weights_scale, self.input_scale, grad_scale, self.output_scale)                
@@ -261,12 +264,16 @@ class QFullyConnectedLayerWithScale:
         self.grad_weights_scale = 0.9 * self.grad_weights_scale + 0.1 * cp.max(cp.abs(grad_weights))        
         self.gws_hist.append(self.grad_weights_scale)
 
+
+
+        # get the grad b scale
         self.grad_bias_scale = 0.9 * self.grad_bias_scale + 0.1 * cp.max(cp.abs(grad_biases))        
         self.gbs_hist.append(self.grad_bias_scale)
 
         # scale the grad
         grad_weights /= self.grad_weights_scale
         grad_biases /= self.grad_bias_scale
+        
         # quantize the grad
         qgw = quantize(grad_weights, True)
         qgb = quantize(grad_biases, True)        
@@ -288,8 +295,11 @@ class QFullyConnectedLayerWithScale:
         self.qb = self.qb - learning_rate * qgb
         
         # atribui a weights. Weights será escalado e quantizado durante inferência
-        self.weights = quantize(self.qw, True)
-        self.biases = quantize(self.qb, True)
+        self.weights = self.qw # quantize(self.qw, True)
+        self.weights = cp.clip(self.weights, -7, 7)         
+        self.biases = self.qb
+        self.biases = cp.clip(self.biases, -127., 127.) 
+        
         ###########################################################################
 
 

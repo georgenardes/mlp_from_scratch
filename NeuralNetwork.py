@@ -207,6 +207,10 @@ class QNeuralNetworkWithScale:
     """ rede neural com tratamento de escala e quantização de pesos e ativações """
 
     def __init__(self, input_size, output_size):
+        # iterations of dnn training
+        self.iteration = 0        
+
+        # input and output size of the NN
         self.input_size = input_size
         self.output_size = output_size
 
@@ -244,17 +248,16 @@ class QNeuralNetworkWithScale:
             elif isinstance(layer, ReLU):
                 output = layer.forward(output)
 
-        # desnormaliza saída
+        # desescala saída
         output = output * x_scale
+        self.layers[-1].output_scale = 1. # como a saída da última camada é escalada -> quantizada -> desescalada, logo a escala da saída é 1...
 
         return output
 
 
     def backward(self, grad_output, learning_rate):
-
-        # faz essa multiplicação para padronizar operações de retropropagação nas camadas
-        grad_output = grad_output * self.layers[-1].output_scale
-        # # # # # desconsiderar # # # # #
+        # clip grad
+        grad_output = cp.clip(grad_output, -5, 5)        
 
         # escala gradiente com média móvel
         self.grad_output_scale = 0.9 * self.grad_output_scale + 0.1 * cp.max(cp.abs(grad_output))
@@ -276,10 +279,20 @@ class QNeuralNetworkWithScale:
 
 
     def train(self, inputs, targets, learning_rate, num_epochs, batch_size=None, x_val = None, y_val = None):
+        # zerout num of iteration        
+        self.iteration = 0
+        # accuracy history
+        self.acc_hist = []
+        # loss history
+        self.loss_hist = []
+
+
         for epoch in range(num_epochs):
             loss = 0.0
             for batch_inputs, y_true in self.get_batches(inputs, targets, batch_size):
-                
+                # iteration step
+                self.iteration += 1
+
                 # Forward pass
                 z = self.forward(batch_inputs)                
                 
@@ -297,6 +310,7 @@ class QNeuralNetworkWithScale:
                 
 
             loss /= len(inputs)
+            self.loss_hist.append(loss)
 
             str_train_log = f"Epoch {epoch+1}/{num_epochs}, Loss: {loss} "
             if x_val is not None and y_val is not None:
@@ -306,29 +320,31 @@ class QNeuralNetworkWithScale:
 
                 # Calculate accuracy
                 accuracy = cp.mean(y_pred == cp.argmax(y_val, axis=1))
+                self.acc_hist.append(accuracy)
 
                 str_train_log += f"Accuracy: {accuracy * 100}%"
                 
             print(str_train_log)
 
 
-    def predict(self, inputs, batch_size=32):
-        outputs = []
-        for batch_inputs in self.get_batches(inputs, batch_size=batch_size):        
-            output = self.forward(batch_inputs)
-            predicted_class = cp.argmax(output, axis=-1)
-            outputs.append(predicted_class)
-        outputs = cp.concatenate(outputs, axis=0)
-        return cp.array(outputs)
-    
+    def predict(self, inputs, batch_size=None):
 
-    def predict(self, inputs):
-        outputs = []
-        for input in inputs:
-            output = self.forward(input)
-            predicted_class = cp.argmax(output)
-            outputs.append(predicted_class)        
-        return cp.array(outputs)
+        if batch_size is None:
+            outputs = []
+            for input in inputs:
+                output = self.forward(input)
+                predicted_class = cp.argmax(output)
+                outputs.append(predicted_class)        
+            return cp.array(outputs)
+        else:            
+            outputs = []
+            for batch_inputs in self.get_batches(inputs, batch_size=batch_size):        
+                output = self.forward(batch_inputs)
+                predicted_class = cp.argmax(output, axis=-1)
+                outputs.append(predicted_class)
+            outputs = cp.concatenate(outputs, axis=0)
+            return cp.array(outputs)
+                
 
 
     def cross_entropy_loss_with_logits(self, output, targets):

@@ -22,7 +22,7 @@ def stochastic_rounding(x):
     return rounded
 
 
-def quantize(x, round_stoch = True):
+def quantize(x, stochastic_round = True, stochastic_zero = True):
     """ exponentiation and quantization function """
 
     # just to avoid numerical problems
@@ -41,34 +41,35 @@ def quantize(x, round_stoch = True):
     exp = cp.log2(cliped_abs_x)
 
     # round to nearest and cast to int (use stochastic rounding)
-    if round_stoch:
+    if stochastic_round:
         round_exp = stochastic_rounding(exp)
     else:
         round_exp = (cp.round(exp)).astype(cp.int32)
 
     
-    ###################
-    # stochastic zero
-    # detect underflow
-    underflow = cp.where(round_exp < -7, 1, 0)
-    # clip expoent in -7
-    clip_exp = cp.where(underflow, -7, round_exp)    
-    # randomize the signal
-    s = cp.where(cp.logical_and(cp.random.random(round_exp.shape) < 0.5, underflow), -s, s) 
-    # convert to float32 again
-    qx = s * cp.power(2., clip_exp)
-    ###################
-
-    # ###################
-    # # fixed zero    
-    # # detect underflow
-    # underflow = cp.where(round_exp < -7, 1, 0)
-    # # clip exponents
-    # clip_exp = cp.where(underflow, -7, round_exp)
-    # # convert to float32 again
-    # qx = s * cp.power(2., clip_exp)
-    # # fixed zero
-    # qx = cp.where(underflow, 0, qx)
+    if stochastic_zero:
+        ###################
+        # stochastic zero
+        # detect underflow
+        underflow = cp.where(round_exp < -7, 1, 0)
+        # clip expoent in -7
+        clip_exp = cp.where(underflow, -7, round_exp)    
+        # randomize the signal
+        s = cp.where(cp.logical_and(cp.random.random(round_exp.shape) < 0.5, underflow), -s, s) 
+        # convert to float32 again
+        qx = s * cp.power(2., clip_exp)
+        ###################
+    else:
+        ###################
+        # fixed zero    
+        # detect underflow
+        underflow = cp.where(round_exp <= -7, 1, 0)
+        
+        # convert to float32 again
+        qx = s * cp.power(2., round_exp)
+        
+        # fixed zero
+        qx = cp.where(underflow, 0, qx)
 
     return qx
 
