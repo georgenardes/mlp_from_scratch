@@ -134,14 +134,17 @@ class QFullyConnectedLayerWithScale:
         
         self.input_size = input_size
         self.output_size = output_size
-        self.weights = cp.random.randn(input_size, output_size) * cp.sqrt(2/input_size) # * cp.sqrt(0.15) # 
-        self.qw = None # quantized weight use for backprop
-        self.biases = cp.zeros((1, output_size))
-        self.qb = None # quantized bias
+
+        w = cp.random.randn(input_size, output_size) * cp.sqrt(2/input_size) 
+        self.weights_scale = cp.max(cp.abs(w))
+        self.qw = quantize(w/self.weights_scale, True, True)
+
+        b = cp.zeros((1, output_size))
+        self.bias_scale = 1
+        self.qb = quantize(b, True, True) # quantized bias
 
         #################################################
         # escala inicial dos pesos
-        self.weights_scale = cp.max(cp.abs(self.weights))
         self.ws_hist = []
         self.bs_hist = []
         self.input_scale = None
@@ -162,13 +165,6 @@ class QFullyConnectedLayerWithScale:
         
         self.update_scale = True
 
-
-    def forward(self, inputs):
-        """ Default forward """
-
-        self.inputs = inputs        
-        self.output = cp.matmul(inputs, self.weights) + self.biases
-        return self.output
     
     
     def foward_with_scale(self, inputs, x_scale):
@@ -177,25 +173,12 @@ class QFullyConnectedLayerWithScale:
 
         # salva escala de entrada
         self.input_scale = x_scale
-        # descobre a escala dos pesos com base no valor máximo
-        self.weights_scale = 0.99*self.weights_scale + 0.01*cp.max(cp.abs(self.weights))
-        self.ws_hist.append(self.weights_scale)
-        # escala os pesos 
-        w = self.weights / self.weights_scale
-        # escala os biases com base na escala dos pesos e escala das ativações
-        b = self.biases / (self.weights_scale * self.input_scale)
-        self.bs_hist.append(self.weights_scale * self.input_scale)
 
-        # quantiza os pesos
-        self.qw = quantize(w, True)
-
-        # quantiza os biases
-        self.qb = quantize(b, True)   
-                     
+                    
         #################################################
 
         # faz matmul e desescala pesos e biases                
-        self.output = (cp.matmul(inputs, self.qw) + self.qb) * (self.weights_scale * self.input_scale)
+        self.output = (cp.matmul(inputs, self.qw) * self.weights_scale * self.input_scale) + (self.qb * self.bias_scale)
                 
         # descobre escala da saída com base em uma média
         self.output_scale = 0.99 * self.output_scale + 0.01 * cp.max(cp.abs(self.output))      
@@ -209,22 +192,6 @@ class QFullyConnectedLayerWithScale:
         #################################################
 
         return self.output
-
-
-    def backward(self, grad_output, learning_rate):
-        
-        # scaling gradients        
-        grad_output = (grad_output ) * (self.weights_scale * self.input_scale / self.output_scale)
-        
-        # gradient calculation
-        grad_input = cp.matmul(grad_output, self.weights.T / self.weights_scale)
-        grad_weights = cp.matmul(self.inputs.T, grad_output) / self.weights_scale
-        grad_biases = cp.sum(grad_output, axis=0, keepdims=True) / (self.weights_scale * self.input_scale)
-
-        # weight update
-        self.weights -= learning_rate * grad_weights
-        self.biases -=  learning_rate * grad_biases
-        return grad_input
 
     
     def backward_with_scale(self, grad_output, grad_scale, learning_rate):
@@ -243,10 +210,10 @@ class QFullyConnectedLayerWithScale:
 
         # scaling gradients        
         # print( self.weights_scale, self.input_scale, grad_scale, self.output_scale)                
-        grad_output = (grad_output) * (self.weights_scale * self.input_scale * grad_scale  / self.output_scale)         
+        grad_output = grad_output * ( grad_scale / self.output_scale)         
         
         # gradient calculation. self.qw é a matriz de pesos quantizados utilizados na forward prop
-        grad_input = cp.matmul(grad_output, self.qw.T)
+        grad_input = cp.matmul(grad_output, self.qw.T) * self.input_scale * self.weights_scale
 
         # scale de grad_output or grad_of_input
         self.grad_output_scale =  0.9 * self.grad_output_scale + 0.1 * cp.max(cp.abs(grad_input))
@@ -257,14 +224,12 @@ class QFullyConnectedLayerWithScale:
                 
         # calcula o gradiente dos pesos. self.inputs é a entrada dessa camada na etapa de forward prop. Ela é quantizada. 
         # self.weights_scale é a escala utilizada para os pesos na etapa forward prop e é necessário aqui por conta da derivada
-        grad_weights = cp.matmul(self.inputs.T, grad_output) / self.weights_scale
-        grad_biases = cp.sum(grad_output, axis=0, keepdims=True) / (self.weights_scale * self.input_scale)
+        grad_weights = cp.matmul(self.inputs.T, grad_output) * self.input_scale
+        grad_biases = cp.sum(grad_output, axis=0, keepdims=True) 
 
         # get the grad w scale
         self.grad_weights_scale = 0.9 * self.grad_weights_scale + 0.1 * cp.max(cp.abs(grad_weights))        
         self.gws_hist.append(self.grad_weights_scale)
-
-
 
         # get the grad b scale
         self.grad_bias_scale = 0.9 * self.grad_bias_scale + 0.1 * cp.max(cp.abs(grad_biases))        
@@ -295,33 +260,30 @@ class QFullyConnectedLayerWithScale:
         self.qb = self.qb - learning_rate * qgb
         
         # atribui a weights. Weights será escalado e quantizado durante inferência
-        self.weights = self.qw # quantize(self.qw, True)
-        self.weights = cp.clip(self.weights, -7, 7)         
-        self.biases = self.qb
-        self.biases = cp.clip(self.biases, -127., 127.) 
+        w = self.qw 
+        w = cp.clip(w, -7, 7)         
+        b = self.qb
+        b = cp.clip(b, -127., 127.) 
+            
+        # colocar quantização aqui e remover do forward
+        # descobre a escala dos pesos com base no valor máximo
+        self.weights_scale = 0.99*self.weights_scale + 0.01*cp.max(cp.abs(w))
+        self.ws_hist.append(self.weights_scale)
+
+        self.bias_scale = 0.99*self.bias_scale + 0.01*cp.max(cp.abs(b))
+        self.bs_hist.append(self.bias_scale)
         
-        # colocar quantização aqui
-
-        ###########################################################################
-
-
-        # #################### ETAPA DE ATUALIZAÇÃO DOS PESOS ###################### (não funcionou assim)
-        # # weight update
-        # self.qw = self.qw - learning_rate * self.grad_weights_scale * qgw
-        # self.qb = self.qb - learning_rate * self.grad_bias_scale * qgb
-        # 
-        # self.weights = self.qw * self.weights_scale
-        # self.biases = self.qb * self.weights_scale * self.input_scale
-        # ############################################################################
-
-        ##################### ETAPA DE ATUALIZAÇÃO DOS PESOS ######################
-        ## scale back the grad
-        #grad_weights = qgw * self.grad_weights_scale
-        #grad_biases = qgb * self.grad_bias_scale
-        ## weight update
-        #self.weights -= learning_rate * grad_weights
-        #self.biases -=  learning_rate * grad_biases
-        #############################################################################
+        # escala os pesos 
+        w = w / self.weights_scale
+        
+        # escala os biases 
+        b = b / self.bias_scale
+        
+        
+        # quantiza peesos e bias
+        self.qw = quantize(w, True, True)
+        self.qb = quantize(b, True, False)
+               
         
         return grad_input
     

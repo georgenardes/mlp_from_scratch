@@ -263,12 +263,12 @@ class QNeuralNetworkWithScale:
         grad_output = cp.clip(grad_output, -2, 2)        
 
         # escala gradiente com média móvel
-        self.grad_output_scale = 0.9 * self.grad_output_scale + 0.1 * cp.max(cp.abs(grad_output))
+        self.grad_output_scale = 0.99 * self.grad_output_scale + 0.01 * cp.max(cp.abs(grad_output))
         grad_output_scale = self.grad_output_scale
         grad_output /= grad_output_scale
 
         # quantiza o gradiente
-        grad_output = quantize(grad_output, True)
+        grad_output = quantize(grad_output, True, False)
 
         for layer in reversed(self.layers):
             if isinstance(layer, QFullyConnectedLayerWithScale):
