@@ -219,9 +219,9 @@ class QNeuralNetworkWithScale:
 
         self.layers = []
         self.layers.append(QFullyConnectedLayerWithScale(input_size, 256))
-        self.layers.append(ReLU())
+        self.layers.append(QReLU())
         self.layers.append(QFullyConnectedLayerWithScale(256, 256))
-        self.layers.append(ReLU())
+        self.layers.append(QReLU())
         self.layers.append(QFullyConnectedLayerWithScale(256, output_size))
 
         self.softmax = Softmax()
@@ -245,8 +245,11 @@ class QNeuralNetworkWithScale:
                 output = layer.foward_with_scale(output, x_scale=x_scale)
                 x_scale = layer.output_scale
 
-            elif isinstance(layer, ReLU):
+            elif isinstance(layer, QReLU):
                 output = layer.forward(output)
+
+            else:
+                print("não identificado!")
 
         # desescala saída
         output = output * x_scale
@@ -257,7 +260,7 @@ class QNeuralNetworkWithScale:
 
     def backward(self, grad_output, learning_rate):
         # clip grad
-        grad_output = cp.clip(grad_output, -5, 5)        
+        grad_output = cp.clip(grad_output, -2, 2)        
 
         # escala gradiente com média móvel
         self.grad_output_scale = 0.9 * self.grad_output_scale + 0.1 * cp.max(cp.abs(grad_output))
@@ -271,7 +274,7 @@ class QNeuralNetworkWithScale:
             if isinstance(layer, QFullyConnectedLayerWithScale):
                 grad_output = layer.backward_with_scale(grad_output, grad_output_scale, learning_rate)
                 grad_output_scale = layer.grad_output_scale
-            elif isinstance(layer, ReLU):
+            elif isinstance(layer, QReLU):
                 grad_output = layer.backward(grad_output, learning_rate)
             else:
                 print("pau!")

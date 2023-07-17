@@ -1,5 +1,6 @@
 import numpy as np
 import cupy as cp
+from quantizer import quantize
 
 class ActivationLayer:
     def forward(self, inputs):
@@ -19,7 +20,9 @@ class ReLU(ActivationLayer):
 class QReLU(ActivationLayer):
     def forward(self, inputs):
         self.inputs = inputs
-        return cp.maximum(0, inputs)
+        out = cp.maximum(0, inputs)
+        out = quantize(out, stochastic_round=True, stochastic_zero=True)
+        return out
 
     def backward(self, grad_output, learning_rate):
         return grad_output * cp.where(self.inputs > 0, 1, 0)

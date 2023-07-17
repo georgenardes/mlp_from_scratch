@@ -63,7 +63,7 @@ def quantize(x, stochastic_round = True, stochastic_zero = True):
         ###################
         # fixed zero    
         # detect underflow
-        underflow = cp.where(round_exp <= -7, 1, 0)
+        underflow = cp.where(round_exp < -7, 1, 0)
         
         # convert to float32 again
         qx = s * cp.power(2., round_exp)

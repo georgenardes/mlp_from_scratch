@@ -134,7 +134,7 @@ class QFullyConnectedLayerWithScale:
         
         self.input_size = input_size
         self.output_size = output_size
-        self.weights = cp.random.randn(input_size, output_size) * cp.sqrt(0.15) # * cp.sqrt(2/input_size)
+        self.weights = cp.random.randn(input_size, output_size) * cp.sqrt(2/input_size) # * cp.sqrt(0.15) # 
         self.qw = None # quantized weight use for backprop
         self.biases = cp.zeros((1, output_size))
         self.qb = None # quantized bias
@@ -300,6 +300,8 @@ class QFullyConnectedLayerWithScale:
         self.biases = self.qb
         self.biases = cp.clip(self.biases, -127., 127.) 
         
+        # colocar quantização aqui
+
         ###########################################################################
 
 
