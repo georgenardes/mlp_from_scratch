@@ -179,7 +179,7 @@ class QFullyConnectedLayerWithScale:
                 
         # descobre escala da saída com base em uma média
         self.output_scale = 0.99 * self.output_scale + 0.01 * cp.max(cp.abs(self.output))      
-        self.os_hist.append(self.output_scale)
+        self.os_hist.append(cp.max(self.output) / ((self.weights_scale * self.input_scale)))
 
         # escala saída
         self.output = self.output / self.output_scale
@@ -200,17 +200,15 @@ class QFullyConnectedLayerWithScale:
         learning_rate: taxa de aprendizado
         """                
 
-        self.gos_hist.append(grad_scale)
-        
-        # if 1000 < self.iteration < 11000:
-        #   self.grad_output_hist.append(cp.asnumpy(grad_output))
 
         # scaling gradients                
-        grad_output = grad_output * (self.weights_scale * self.input_scale * grad_scale  / self.output_scale)    
+        # grad_output = grad_output * (self.weights_scale * self.input_scale * grad_scale  / self.output_scale)    
         
         # gradient calculation. self.qw é a matriz de pesos quantizados utilizados na forward prop
-        grad_input = cp.matmul(grad_output, self.qw.T) 
+        grad_input = cp.matmul(grad_output, self.qw.T) * (self.weights_scale * self.input_scale * grad_scale  / self.output_scale)             
 
+        self.gos_hist.append(cp.max(cp.abs(grad_input)) / (self.weights_scale * self.input_scale * grad_scale  / self.output_scale)) # valor maximo dos erros        
+        
         # scale de grad_output or grad_of_input
         self.grad_output_scale =  0.9 * self.grad_output_scale + 0.1 * cp.max(cp.abs(grad_input))
         grad_input = grad_input / self.grad_output_scale
@@ -220,16 +218,16 @@ class QFullyConnectedLayerWithScale:
                 
         # calcula o gradiente dos pesos. self.inputs é a entrada dessa camada na etapa de forward prop. Ela é quantizada. 
         # self.weights_scale é a escala utilizada para os pesos na etapa forward prop e é necessário aqui por conta da derivada
-        grad_weights = cp.matmul(self.inputs.T, grad_output) / self.weights_scale
-        grad_biases = cp.sum(grad_output, axis=0, keepdims=True) / (self.weights_scale * self.input_scale)
+        grad_weights = cp.matmul(self.inputs.T, grad_output) * (self.weights_scale * self.input_scale * grad_scale  / self.output_scale) / self.weights_scale
+        grad_biases = cp.sum(grad_output, axis=0, keepdims=True) * (self.weights_scale * self.input_scale * grad_scale  / self.output_scale)  / (self.weights_scale * self.input_scale)
 
         # get the grad w scale
         self.grad_weights_scale = 0.9 * self.grad_weights_scale + 0.1 * cp.max(cp.abs(grad_weights))        
-        self.gws_hist.append(self.grad_weights_scale)
+        self.gws_hist.append( cp.max(cp.abs(grad_weights)) / ((self.weights_scale * self.input_scale * grad_scale  / self.output_scale) / self.weights_scale))
 
         # get the grad b scale
         self.grad_bias_scale = 0.9 * self.grad_bias_scale + 0.1 * cp.max(cp.abs(grad_biases))        
-        self.gbs_hist.append(self.grad_bias_scale)
+        self.gbs_hist.append(  cp.max(cp.abs(grad_biases)) / ((self.weights_scale * self.input_scale * grad_scale  / self.output_scale)  / (self.weights_scale * self.input_scale)))
 
         # scale the grad
         grad_weights /= self.grad_weights_scale
