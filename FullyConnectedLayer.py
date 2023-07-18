@@ -141,7 +141,7 @@ class QFullyConnectedLayerWithScale:
 
         b = cp.zeros((1, output_size))
         self.bias_scale = 1
-        self.qb = quantize(b, True, True) # quantized bias
+        self.qb = quantize(b, True, False) # quantized bias
 
         #################################################
         # escala inicial dos pesos
