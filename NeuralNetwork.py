@@ -1,7 +1,7 @@
 import numpy as np
 from FullyConnectedLayer import FullyConnectedLayer, FullyConnectedLayerWithScale, QFullyConnectedLayerWithScale
 from Activations import *
-from quantizer import quantize
+from quantizer import quantize, quantize_po2
 import cupy as cp
 
 class NeuralNetwork:
@@ -233,7 +233,7 @@ class QNeuralNetworkWithScale:
         x_scale = cp.max(cp.abs(cp_inputs))    
         
         # escala entrada e atribui a variavel output que entrará no laço
-        output = cp_inputs / x_scale          
+        output = cp_inputs / quantize_po2(x_scale)
 
         # quantiza a entrada
         output = quantize(cp_inputs, True)
@@ -253,7 +253,7 @@ class QNeuralNetworkWithScale:
 
         # desescala saída
         output = output * x_scale
-        self.layers[-1].output_scale = 1. # como a saída da última camada é escalada -> quantizada -> desescalada, logo a escala da saída é 1...
+        self.layers[-1].output_scale = cp.array(1.) # como a saída da última camada é escalada -> quantizada -> desescalada, logo a escala da saída é 1...
 
         return output
 
@@ -265,7 +265,7 @@ class QNeuralNetworkWithScale:
         # escala gradiente com média móvel
         self.grad_output_scale = 0.99 * self.grad_output_scale + 0.01 * cp.max(cp.abs(grad_output))
         grad_output_scale = self.grad_output_scale
-        grad_output /= grad_output_scale
+        grad_output /= quantize_po2(grad_output_scale)
 
         # quantiza o gradiente
         grad_output = quantize(grad_output, True, False)

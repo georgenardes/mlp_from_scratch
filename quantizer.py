@@ -1,6 +1,7 @@
 import numpy as np
 import cupy as cp
 
+
 def stochastic_rounding(x):
     # takes the integer part of the number
     x_int = x.astype(cp.int32)
@@ -74,3 +75,17 @@ def quantize(x, stochastic_round = True, stochastic_zero = True):
     return qx
 
 
+
+
+
+def quantize_po2(x):
+    """ x must be positive and greater than 1e-38"""
+
+    eps = cp.array(1e-38)
+    
+    # clip the value to be quantized to avoid numerical under/overflow
+    cx = cp.where(x < eps, eps, x)    
+
+    qx = cp.power(2., cp.ceil(cp.log2(cx)))
+    
+    return qx # bypass
