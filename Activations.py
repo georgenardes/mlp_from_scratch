@@ -1,5 +1,6 @@
 import numpy as np
 import cupy as cp
+import tensorflow as tf
 from quantizer import quantize
 
 class ActivationLayer:
@@ -9,14 +10,20 @@ class ActivationLayer:
     def backward(self, grad_output, learning_rate):
         raise NotImplementedError
 
-class ReLU(ActivationLayer):
-    def forward(self, inputs):
-        self.inputs = inputs
-        return cp.maximum(0, inputs)
 
-    def backward(self, grad_output, learning_rate, **kwargs):
-        return grad_output * cp.where(self.inputs > 0, 1, 0)
+class ReLU(ActivationLayer):
+    def __init__(self):
+        self.relu = tf.keras.layers.ReLU()
+
+    def forward(self, inputs):
+        self.inputs = inputs        
+        return self.relu(inputs)
+
+    def backward(self, dz, learning_rate, **kwargs):
+        dx = dz * tf.where(self.inputs > 0., 1., 0.)        
+        return dx
     
+
 class QReLU(ActivationLayer):
     def forward(self, inputs):
         self.inputs = inputs
@@ -46,10 +53,10 @@ class Tanh(ActivationLayer):
     
     
 class Softmax(ActivationLayer):
-    def forward(self, inputs):
-        self.outputs = cp.exp(inputs - cp.max(inputs, axis=-1, keepdims=True))
-        self.outputs /= cp.sum(self.outputs, axis=-1, keepdims=True)
+    def forward(self, inputs):        
+        self.outputs = tf.exp(inputs - tf.reduce_max(inputs, axis=-1, keepdims=True))
+        self.outputs /= tf.reduce_sum(self.outputs, axis=-1, keepdims=True)
         return self.outputs
 
-    def backward(self, grad_output, learning_rate):
-        return grad_output
+    def backward(self, dz, learning_rate):
+        return dz

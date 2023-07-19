@@ -1,6 +1,7 @@
 import numpy as np
 from quantizer import quantize, stochastic_rounding, quantize_po2
 import cupy as cp
+import tensorflow as tf
 
 
 class FullyConnectedLayer:
@@ -9,19 +10,19 @@ class FullyConnectedLayer:
     def __init__(self, input_size, output_size):
         self.input_size = input_size
         self.output_size = output_size
-        self.weights = np.random.randn(input_size, output_size) * np.sqrt(2/input_size)
-        self.biases = np.zeros((1, output_size))
+        self.weights = tf.constant(np.random.randn(input_size, output_size) * np.sqrt(2/input_size), tf.float32)
+        self.biases = tf.zeros((1, output_size))
 
     def forward(self, inputs):
         self.inputs = inputs
-        self.output = np.matmul(inputs, self.weights) + self.biases
+        self.output = tf.matmul(inputs, self.weights) + self.biases
         return self.output
 
     def backward(self, grad_output, learning_rate):
         # gradient calculation
-        grad_input = np.matmul(grad_output, self.weights.T)
-        grad_weights = np.matmul(self.inputs.T, grad_output)
-        grad_biases = np.sum(grad_output, axis=0, keepdims=True)
+        grad_input = tf.matmul(grad_output, self.weights, transpose_b=True)
+        grad_weights = tf.matmul(self.inputs, grad_output, transpose_a=True)
+        grad_biases = tf.reduce_sum(grad_output, axis=0, keepdims=True)
 
         # weight update
         self.weights -= learning_rate * grad_weights

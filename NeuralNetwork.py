@@ -1,8 +1,10 @@
 import numpy as np
 from FullyConnectedLayer import FullyConnectedLayer, FullyConnectedLayerWithScale, QFullyConnectedLayerWithScale
+from ConvLayer import CustomConvLayer, CustomMaxPool, CustomFlatten
 from Activations import *
 from quantizer import quantize, quantize_po2
 import cupy as cp
+
 
 class NeuralNetwork:
     """ vanilla NN """
@@ -387,3 +389,136 @@ class QNeuralNetworkWithScale:
                     yield inputs[num_batches * batch_size:], targets[num_batches * batch_size:]                
 
                     
+
+
+
+class LeNet:
+    """ vanilla LeNet NN """
+    def __init__(self, input_shape, output_size):
+        self.batch_size = input_shape[0]
+        self.input_shape = input_shape
+        self.output_size = output_size
+
+        self.layers = []
+        self.layers.append(CustomConvLayer(nfilters=16, kernel_size=3, input_channels=input_shape[-1], strides=[1,1,1,1], padding='SAME'))
+        self.layers.append(ReLU())
+        self.layers.append(CustomMaxPool(ksize=2, stride=(2,2)))
+        self.layers.append(CustomConvLayer(nfilters=32, kernel_size=3, input_channels=input_shape[-1], strides=[1,1,1,1], padding='SAME'))
+        self.layers.append(ReLU())
+        self.layers.append(CustomMaxPool(ksize=2, stride=(2,2)))
+        self.layers.append(CustomFlatten(input_shape=[7, 7, 32]))
+        self.layers.append(FullyConnectedLayer(1568, 256))
+        self.layers.append(ReLU())
+        self.layers.append(FullyConnectedLayer(256, 256))
+        self.layers.append(ReLU())
+        self.layers.append(FullyConnectedLayer(256, output_size))
+        self.softmax = Softmax()
+    
+
+    def forward(self, inputs):
+        output = inputs
+        for layer in self.layers:
+            output = layer.forward(output)
+        return output
+
+
+    def backward(self, grad_output, learning_rate):
+        for layer in reversed(self.layers):
+            grad_output = layer.backward(grad_output, learning_rate)
+
+
+    def train(self, inputs, targets, learning_rate, num_epochs,  x_val=None, y_val=None):
+        for epoch in range(num_epochs):
+            loss = 0.0
+            for batch_inputs, y_true in self.get_batches(inputs, targets, self.batch_size):
+                
+                # Forward pass
+                z = self.forward(batch_inputs)                
+
+                # apply softmax
+                y_pred = self.softmax.forward(z)
+
+                # Compute loss
+                loss += self.cross_entropy_loss_with_logits(y_pred, y_true)
+                
+                # Compute the derivative of the loss
+                dz = self.cross_entropy_loss_with_logits_derivative(y_pred, y_true)
+                
+                # backward pass
+                self.backward(dz, learning_rate)
+
+            loss /= len(inputs)
+            
+            str_train_log = f"Epoch {epoch+1}/{num_epochs}, Loss: {loss} "
+            if x_val is not None and y_val is not None:
+                # validation
+                z = self.forward(x_val)
+                y_pred = tf.argmax(z, axis=-1, output_type=tf.int32)
+
+                # Calculate accuracy
+                accuracy = tf.reduce_mean(tf.cast(y_pred == tf.argmax(y_val, axis=-1, output_type=tf.int32), tf.float32)).numpy()              
+
+                str_train_log += f"Accuracy: {accuracy * 100}%"
+                
+            print(str_train_log)
+
+
+
+    def predict(self, inputs, batch_size=None):
+
+        if batch_size is None:
+            outputs = []
+            for input in inputs:
+                output = self.forward(input)
+                predicted_class = tf.argmax(output)
+                outputs.append(predicted_class)        
+            return tf.stack(outputs, axis=0)
+        else:            
+            outputs = []
+            for batch_inputs in self.get_batches(inputs, batch_size=batch_size):        
+                output = self.forward(batch_inputs)
+                predicted_class = tf.argmax(output, axis=-1)
+                outputs.append(predicted_class)
+            outputs = tf.concat(outputs, axis=0)
+            return outputs
+
+
+
+
+
+
+    def cross_entropy_loss_with_logits(self, output, targets):
+        num_samples = output.shape[0]                
+        loss = tf.reduce_sum(-targets * tf.cast(tf.math.log(output + 1e-16), tf.float32)) #/ num_samples
+        return loss
+
+
+    def cross_entropy_loss_with_logits_derivative(self, output, targets):
+        # https://towardsdatascience.com/derivative-of-the-softmax-function-and-the-categorical-cross-entropy-loss-ffceefc081d1
+        # The output of the network must pass to the softmax to this function here works
+        # the derivative is quite complex and involves a lot of tricks.        
+        grad_output = tf.subtract(output, targets)
+        return grad_output
+
+
+    def get_batches(self, inputs, targets=None, batch_size=None):
+        if batch_size is None or batch_size >= len(inputs):
+            yield inputs, targets
+        else:
+            if targets is None:
+                num_batches = len(inputs) // batch_size
+                for i in range(num_batches):
+                    start = i * batch_size
+                    end = (i + 1) * batch_size
+                    yield inputs[start:end]
+                if len(inputs) % batch_size != 0:
+                    yield inputs[num_batches * batch_size:]
+
+            else:
+                num_batches = len(inputs) // batch_size
+                for i in range(num_batches):
+                    start = i * batch_size
+                    end = (i + 1) * batch_size
+                    yield inputs[start:end], targets[start:end]
+                if len(inputs) % batch_size != 0:
+                    yield inputs[num_batches * batch_size:], targets[num_batches * batch_size:]         
