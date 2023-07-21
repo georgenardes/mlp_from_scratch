@@ -113,7 +113,7 @@ class QConvLayer():
         """ 
         Esta função faz propagação do erro para os pesos e para a entrada.
 
-        grad_output: esse parâmetro é o Erro que vem da camada l+1. Ele vem quantizado para Deep Nibble.
+        dz: esse parâmetro é o Erro que vem da camada l+1. Ele vem quantizado para Deep Nibble.
         grad_scale: esse é a Escala usada para normalizar o Erro antes de quantiza-lo para Deep Nibble
         learning_rate: taxa de aprendizado
         """         
@@ -126,16 +126,16 @@ class QConvLayer():
         self.gos_hist.append(qgos) 
 
         # gradient calculation. self.qw é a matriz de pesos quantizados utilizados na forward prop
-        dx = tf.compat.v1.nn.conv2d_backprop_input(tf.shape(self.inputs), self.filters, dz, strides=self.strides, padding=self.padding) * (qws * qxs * qgos  / qos)
+        dx = tf.compat.v1.nn.conv2d_backprop_input(tf.shape(self.inputs), self.qw, dz, strides=self.strides, padding=self.padding) * (qws * qxs * qgos  / qos)
         # scale de grad_output or grad_of_input
-        self.grad_output_scale =  0.9 * self.grad_output_scale + 0.1 * tf.reduce_max(tf.abs(grad_input))
+        self.grad_output_scale =  0.9 * self.grad_output_scale + 0.1 * tf.reduce_max(tf.abs(dx))
         qgis = quantize_po2(self.grad_output_scale)
-        grad_input = grad_input / qgis
+        dx = dx / qgis
         # quantiza o gradiente
-        grad_input = quantize(grad_input, stochastic_round=True, stochastic_zero=True)
+        qdx = quantize(dx, stochastic_round=True, stochastic_zero=True)
         
         # calcula o gradiente dos pesos. self.inputs é a entrada dessa camada na etapa de forward prop. Ela é quantizada.             
-        dw = tf.compat.v1.nn.conv2d_backprop_filter(self.inputs, tf.shape(self.filters), dz, strides=self.strides, padding=self.padding) * (qxs * qgos / qos) 
+        dw = tf.compat.v1.nn.conv2d_backprop_filter(self.inputs, tf.shape(self.qw), dz, strides=self.strides, padding=self.padding) * (qxs * qgos / qos) 
         db = tf.reduce_sum(dz, (0,1,2), True) * (qgos / qos) 
 
         # get the grad w scale
@@ -198,7 +198,7 @@ class QConvLayer():
         self.qw = quantize(w, True, True)
         self.qb = quantize(b, True, False)        
 
-        return dx
+        return qdx
 
 
 

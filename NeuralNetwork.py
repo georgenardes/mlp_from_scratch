@@ -543,8 +543,11 @@ class QLeNet:
         self.layers.append(QReLU())
         self.layers.append(QFullyConnectedLayerWithScale(256, output_size))
 
-
         self.softmax = Softmax()
+
+        # loss function grad output scale
+        self.grad_output_scale = 1
+        
     
     def forward(self, inputs):
         # descobre a escala do dado de entrada
@@ -559,16 +562,21 @@ class QLeNet:
 
         for layer in self.layers:
             if isinstance(layer, QConvLayer):
+                # print("QConvLayer")
                 output = layer.qforward(output, xs=xs)
                 xs = layer.output_scale
             elif isinstance(layer, QFullyConnectedLayerWithScale):
+                # print("QFullyConnectedLayerWithScale")
                 output = layer.qforward(output, xs=xs)
                 xs = layer.output_scale
             elif isinstance(layer, QReLU):
+                # print("QReLU")
                 output = layer.forward(output)            
             elif isinstance(layer, CustomFlatten):
+                # print("CustomFlatten")
                 output = layer.forward(output)            
             elif isinstance(layer, CustomMaxPool):
+                # print("CustomMaxPool")
                 output = layer.forward(output)
             else:
                 print("não identificado!")
@@ -611,14 +619,13 @@ class QLeNet:
                 print("pau!")
 
 
-
     def train(self, inputs, targets, learning_rate, num_epochs,  x_val=None, y_val=None):
         for epoch in range(num_epochs):
             loss = 0.0
             for batch_inputs, y_true in self.get_batches(inputs, targets, self.batch_size):
                 
                 # Forward pass
-                z = self.forward(batch_inputs)                
+                z = self.forward(batch_inputs)                                
 
                 # apply softmax
                 y_pred = self.softmax.forward(z)
@@ -668,12 +675,8 @@ class QLeNet:
             return outputs
 
 
-
-
-
-
     def cross_entropy_loss_with_logits(self, output, targets):
-        num_samples = output.shape[0]                
+        num_samples = output.shape[0]                   
         loss = tf.reduce_sum(-targets * tf.cast(tf.math.log(output + 1e-16), tf.float32)) / num_samples
         return loss
 
