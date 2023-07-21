@@ -1,6 +1,6 @@
 import numpy as np
 from FullyConnectedLayer import FullyConnectedLayer, FullyConnectedLayerWithScale, QFullyConnectedLayerWithScale
-from ConvLayer import CustomConvLayer, CustomMaxPool, CustomFlatten
+from ConvLayer import ConvLayer, CustomMaxPool, CustomFlatten
 from Activations import *
 from quantizer import quantize, quantize_po2
 import cupy as cp
@@ -400,10 +400,10 @@ class LeNet:
         self.output_size = output_size
 
         self.layers = []
-        self.layers.append(CustomConvLayer(nfilters=16, kernel_size=3, input_channels=input_shape[-1], strides=[1,1,1,1], padding='SAME'))
+        self.layers.append(ConvLayer(nfilters=16, kernel_size=3, input_channels=input_shape[-1], strides=[1,1,1,1], padding='SAME'))
         self.layers.append(ReLU())
         self.layers.append(CustomMaxPool(ksize=2, stride=(2,2)))
-        self.layers.append(CustomConvLayer(nfilters=32, kernel_size=3, input_channels=input_shape[-1], strides=[1,1,1,1], padding='SAME'))
+        self.layers.append(ConvLayer(nfilters=32, kernel_size=3, input_channels=input_shape[-1], strides=[1,1,1,1], padding='SAME'))
         self.layers.append(ReLU())
         self.layers.append(CustomMaxPool(ksize=2, stride=(2,2)))
         self.layers.append(CustomFlatten(input_shape=[7, 7, 32]))

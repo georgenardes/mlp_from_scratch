@@ -2,11 +2,17 @@ import tensorflow as tf
 import numpy as np
 
 
-class CustomConvLayer():
+class ConvLayer():
     def __init__(self, nfilters, kernel_size, input_channels, strides=[1,1,1,1], padding='SAME'):        
+        # glorot_initializer = tf.keras.initializers.GlorotNormal()
+        # self.filters = glorot_initializer((kernel_size, kernel_size, input_channels, nfilters), tf.float32)
         
-        self.filters = tf.constant(np.random.randn(kernel_size, kernel_size, input_channels, nfilters), dtype=tf.float32)
-        self.bias = tf.constant(np.random.randn(1,1,1,nfilters), dtype=tf.float32)
+        # he_initializer = tf.keras.initializers.HeUniform()
+        # self.filters = he_initializer((kernel_size, kernel_size, input_channels, nfilters), tf.float32)
+
+        # esse inicializador funcionou melhor na rede 32 bits
+        self.filters = tf.constant(np.random.randn(kernel_size, kernel_size, input_channels, nfilters) * np.sqrt(2/input_channels), dtype=tf.float32)
+        self.bias = tf.constant(np.zeros((1,1,1,nfilters)), dtype=tf.float32)
         
         # other atributes        
         self.strides = strides
@@ -29,7 +35,45 @@ class CustomConvLayer():
         self.bias = self.bias - learning_rate * db
 
         return dx
-    
+
+
+
+class QConvLayer():
+    def __init__(self, nfilters, kernel_size, input_channels, strides=[1,1,1,1], padding='SAME'):        
+        # glorot_initializer = tf.keras.initializers.GlorotNormal()
+        # self.filters = glorot_initializer((kernel_size, kernel_size, input_channels, nfilters), tf.float32)
+        
+        # he_initializer = tf.keras.initializers.HeUniform()
+        # self.filters = he_initializer((kernel_size, kernel_size, input_channels, nfilters), tf.float32)
+
+        # esse inicializador funcionou melhor na rede 32 bits
+        self.filters = tf.constant(np.random.randn(kernel_size, kernel_size, input_channels, nfilters) * np.sqrt(2/input_channels), dtype=tf.float32)
+        self.bias = tf.constant(np.zeros((1,1,1,nfilters)), dtype=tf.float32)
+        
+        # other atributes        
+        self.strides = strides
+        self.padding = padding
+                
+        
+    def forward(self, inputs):
+        self.inputs = inputs
+        z =  tf.add(tf.nn.conv2d(input=inputs, filters=self.filters, strides=self.strides, padding=self.padding), self.bias)
+        return z
+
+
+    def backward(self, dz, learning_rate):
+        dx = tf.compat.v1.nn.conv2d_backprop_input(tf.shape(self.inputs), self.filters, dz, strides=self.strides, padding=self.padding)
+        dw = tf.compat.v1.nn.conv2d_backprop_filter(self.inputs, tf.shape(self.filters), dz, strides=self.strides, padding=self.padding)
+        db = tf.reduce_sum(dz, (0,1,2), True)
+
+        # update weights
+        self.filters = self.filters - learning_rate * dw
+        self.bias = self.bias - learning_rate * db
+
+        return dx
+
+
+
 
 class CustomMaxPool():
     def __init__(self, ksize=2, stride=(2,2)):
