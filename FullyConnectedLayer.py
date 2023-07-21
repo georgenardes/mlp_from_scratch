@@ -168,16 +168,16 @@ class QFullyConnectedLayerWithScale:
 
     
     
-    def foward_with_scale(self, inputs, x_scale):
+    def qforward(self, inputs, xs):
         # salva entrada para backprop, (entrada já vem quantizada)
         self.inputs = inputs
 
         # salva escala de entrada
-        self.input_scale = x_scale                            
+        self.input_scale = xs                            
         qxs = quantize_po2(self.input_scale)
         qws = quantize_po2(self.weights_scale)
 
-        # faz matmul e desescala pesos e biases                
+        # faz matmul e desescala pesos e biases
         self.output = (cp.matmul(inputs, self.qw) + self.qb) * (qws * qxs)
                 
         # descobre escala da saída com base em uma média
